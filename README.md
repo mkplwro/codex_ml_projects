@@ -2,6 +2,8 @@
 
 ## Project Overview
 
+Caution! This is my first project and dirty data was made by LLM to practice and train my skills.
+
 This project is an end-to-end machine learning regression project focused on predicting customer monthly spending in PLN.
 
 The main goal was to build, compare, tune, and evaluate regression models using customer-related data. The project also focuses on an important part of machine learning: understanding whether model evaluation results are reliable.
