@@ -192,7 +192,8 @@ project/
 │   └── subscription_customers_dirty.csv
 │
 ├── notebooks/
-│   └── customer_spend_regression.ipynb
+│   └── regression_model.ipynb
+│   └── classification_model.ipyng
 │
 ├── README.md
 ├── requirements.txt
