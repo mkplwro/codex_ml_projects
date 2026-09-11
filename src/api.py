@@ -1,13 +1,13 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from src.predict import predict_churn
+from src.predict import predict_customer
 
 
 app = FastAPI(
-    title="Customer Churn Prediction API",
-    description="API for predicting customer churn probability",
-    version="1.0.0"
+    title="Customer Analytics Prediction API",
+    description="API for predicting customer churn and monthly spend",
+    version="2.0.0",
 )
 
 
@@ -16,23 +16,28 @@ class Customer(BaseModel):
     city: str
     plan: str
     acquisition_channel: str
-    tenure_months: int
+    tenure_months: int = Field(ge=0)
     satisfaction_score: float
     monthly_income_pln: float
-    support_tickets_last_30d: int
-    avg_logins_last_30d: float
-    discount_pct: float
+    support_tickets_last_30d: int = Field(ge=0)
+    avg_logins_last_30d: float = Field(ge=0)
+    discount_pct: float = Field(ge=0)
     auto_renew: int
 
 
 @app.get("/")
 def root():
     return {
-        "message": "Customer Churn Prediction API is running"
+        "message": "Customer Analytics Prediction API is running",
+        "models": ["churn", "monthly_spend"],
     }
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.post("/predict")
 def predict(customer: Customer):
-    result = predict_churn(customer.model_dump())
-    return result
+    return predict_customer(customer.model_dump())

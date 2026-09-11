@@ -8,30 +8,57 @@ from src.preprocessing import clean_data, create_features
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-MODEL_PATH = BASE_DIR / "models" / "churn_model.joblib"
+CHURN_MODEL_PATH = BASE_DIR / "models" / "churn_model.joblib"
+SPEND_MODEL_PATH = BASE_DIR / "models" / "spend_model.joblib"
+
+CHURN_THRESHOLD = 0.35
 
 
-def load_model():
-    return joblib.load(MODEL_PATH)
+def _load_model(path):
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Model file not found: {path}. Run `python -m src.train` first."
+        )
+    return joblib.load(path)
+
+
+def _prepare_customer(customer_data, task):
+    customer_df = pd.DataFrame([customer_data])
+    customer_df = clean_data(customer_df)
+
+    # The API input intentionally does not contain either target.
+    return create_features(customer_df, task=task)
 
 
 def predict_churn(customer_data):
-    model = load_model()
+    model = _load_model(CHURN_MODEL_PATH)
+    customer_df = _prepare_customer(customer_data, task="classification")
 
-    customer_df = pd.DataFrame([customer_data])
-
-    customer_df = clean_data(customer_df)
-    customer_df = create_features(
-        customer_df.assign(churned=0, monthly_spend_pln=0)
-    )
-
-    probability = model.predict_proba(customer_df)[0, 1]
-
-    prediction = int(probability >= 0.35)
+    probability = float(model.predict_proba(customer_df)[0, 1])
+    prediction = int(probability >= CHURN_THRESHOLD)
 
     return {
-        "churn_probability": float(probability),
-        "churn_prediction": prediction
+        "churn_probability": probability,
+        "churn_prediction": prediction,
+    }
+
+
+def predict_spend(customer_data):
+    model = _load_model(SPEND_MODEL_PATH)
+    customer_df = _prepare_customer(customer_data, task="regression")
+
+    prediction = max(0.0, float(model.predict(customer_df)[0]))
+
+    return {
+        "monthly_spend_prediction_pln": prediction,
+    }
+
+
+def predict_customer(customer_data):
+    """Return both model outputs from the same customer payload."""
+    return {
+        **predict_churn(customer_data),
+        **predict_spend(customer_data),
     }
 
 
@@ -47,9 +74,7 @@ if __name__ == "__main__":
         "support_tickets_last_30d": 1,
         "avg_logins_last_30d": 15,
         "discount_pct": 10,
-        "auto_renew": 1
+        "auto_renew": 1,
     }
 
-    result = predict_churn(customer)
-
-    print(result)
+    print(predict_customer(customer))

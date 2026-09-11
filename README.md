@@ -63,6 +63,54 @@ Metric Realism over High Scores: In the regression task, a single holdout test s
 Class Imbalance & Threshold Tuning: Strategic threshold adjustment in churn classification significantly improved retention detection (F2/Recall) over standard default cutoff boundaries.
 ---
 
+
+## Production MLOps layer
+
+The production API now serves **two independent models** from the same customer payload:
+
+- `churn_model.joblib` — binary classification of churn risk.
+- `spend_model.joblib` — regression of `monthly_spend_pln`.
+
+The regression model is the **Lasso model with `alpha=0.2` selected by GridSearchCV in `notebooks/regression_model.ipynb`**. The production training code keeps the same preprocessing logic and task-specific feature engineering as the notebooks.
+
+### Train both models
+
+```bash
+python -m src.train
+```
+
+This creates:
+
+```text
+models/
+├── churn_model.joblib
+└── spend_model.joblib
+```
+
+### Run the API
+
+```bash
+uvicorn src.api:app --reload
+```
+
+`POST /predict` returns:
+
+```json
+{
+  "churn_probability": 0.72,
+  "churn_prediction": 1,
+  "monthly_spend_prediction_pln": 184.37
+}
+```
+
+The API never accepts either target as an input, so `churned` and `monthly_spend_pln` cannot leak into inference.
+
+### Regression target handling
+
+The source data contains three negative `monthly_spend_pln` values. These are excluded from regression training because negative customer spend is not a valid production target. The five extreme `2500 PLN` observations are retained so that the model is not artificially trained only on the easy part of the target distribution.
+
+The notebook's repeated cross-validation should remain the primary performance reference: the single holdout test split is optimistic because all extreme spend observations fall into the training set.
+
 ## Technologies Used
 
 Languages & Core: Python, NumPy, pandas
@@ -77,8 +125,18 @@ Visualization: Matplotlib
 project/
 ├── data/
 │   └── subscription_customers_dirty.csv
+├── models/
+│   ├── churn_model.joblib
+│   └── spend_model.joblib
 ├── notebooks/
 │   ├── classification_model.ipynb
 │   └── regression_model.ipynb
+├── src/
+│   ├── api.py
+│   ├── predict.py
+│   ├── preprocessing.py
+│   └── train.py
+├── tests/
+│   └── test_api.py
 ├── README.md
 └── requirements.txt

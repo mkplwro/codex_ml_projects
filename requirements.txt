@@ -6,3 +6,5 @@ uvicorn
 joblib
 pytest
 httpx
+xgboost
+optuna

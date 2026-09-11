@@ -5,61 +5,72 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 
 
+CATEGORICAL_COLUMNS = [
+    "city",
+    "plan",
+    "acquisition_channel",
+]
+
+
 def clean_data(data):
+    """Apply data-quality rules shared by both production models."""
     data = data.copy()
 
-    # Remove columns that are not used by the model
-    data = data.drop(columns=["customer_id", "join_date"], errors="ignore")
+    data = data.drop(
+        columns=["customer_id", "join_date"],
+        errors="ignore",
+    )
 
-    # Clean categorical values
-    categorical_cols = [
-        "city",
-        "plan",
-        "acquisition_channel"
-    ]
+    for col in CATEGORICAL_COLUMNS:
+        if col in data.columns:
+            data[col] = data[col].astype("string").str.strip().str.lower()
 
-    for col in categorical_cols:
-        data[col] = data[col].str.strip().str.lower()
+    if "age" in data.columns:
+        data.loc[
+            (data["age"] >= 99) | (data["age"] < 18),
+            "age",
+        ] = np.nan
 
-    # Replace invalid ages with missing values
-    data.loc[
-        (data["age"] >= 99) | (data["age"] < 18),
-        "age"
-    ] = np.nan
-
-    # Replace invalid income values with missing values
-    data.loc[
-        (data["monthly_income_pln"] < 0) |
-        (data["monthly_income_pln"] == 999999),
-        "monthly_income_pln"
-    ] = np.nan
+    if "monthly_income_pln" in data.columns:
+        data.loc[
+            (data["monthly_income_pln"] < 0)
+            | (data["monthly_income_pln"] == 999999),
+            "monthly_income_pln",
+        ] = np.nan
 
     return data
 
 
-def create_features(data):
+def create_features(data, task="classification"):
+    """Create task-specific features and remove all target columns."""
+    if task not in {"classification", "regression"}:
+        raise ValueError("task must be 'classification' or 'regression'")
+
     data = data.copy()
 
-    # Remove target-related columns from features
     X = data.drop(
         columns=["monthly_spend_pln", "churned"],
-        errors="ignore"
+        errors="ignore",
     )
 
-    # Feature engineering used in the classification notebook
-    X["satisfaction_per_tenure"] = (
-        X["satisfaction_score"] /
-        (X["tenure_months"] + 1)
-    )
+    if task == "classification":
+        X["satisfaction_per_tenure"] = (
+            X["satisfaction_score"] / (X["tenure_months"] + 1)
+        )
+    else:
+        X["income_per_tenure"] = (
+            X["monthly_income_pln"] / (X["tenure_months"] + 1)
+        )
 
     return X
 
 
 def create_preprocessor():
+    """Return the shared leakage-safe preprocessing pipeline."""
     numeric_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler())
+            ("scaler", StandardScaler()),
         ]
     )
 
@@ -70,25 +81,23 @@ def create_preprocessor():
                 "encoder",
                 OneHotEncoder(
                     handle_unknown="ignore",
-                    sparse_output=False
-                )
-            )
+                    sparse_output=False,
+                ),
+            ),
         ]
     )
 
-    preprocessor = ColumnTransformer(
+    return ColumnTransformer(
         transformers=[
             (
                 "num",
                 numeric_transformer,
-                make_column_selector(dtype_include="number")
+                make_column_selector(dtype_include="number"),
             ),
             (
                 "cat",
                 categorical_transformer,
-                make_column_selector(dtype_include="object")
-            )
+                make_column_selector(dtype_include="object"),
+            ),
         ]
     )
-
-    return preprocessor
